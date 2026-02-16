@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>D&D 5E PHB Character Builder</title>
+  <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+  <style>
+    body { font-family: Arial; background:#1e1e1e; color:white; padding:20px; }
+    select,input,button { padding:6px; margin:4px; }
+    button { background:#4CAF50; border:none; color:white; border-radius:6px; cursor:pointer; }
+    button:hover { background:#45a049; }
+    .section { margin-top:20px; padding:15px; background:#2a2a2a; border-radius:10px; }
+    .stat-line { margin-bottom:6px; }
+  </style>
+</head>
+<body>
+
+<h1>PHB Character Builder</h1>
+
+<div class="section">
+<h2>Basic Info</h2>
+
+<input id="name" placeholder="Character Name">
+
+<select id="class">
+<option value="">Select Class</option>
+<option>Barbarian</option>
+<option>Bard</option>
+<option>Cleric</option>
+<option>Druid</option>
+<option>Fighter</option>
+<option>Monk</option>
+<option>Paladin</option>
+<option>Ranger</option>
+<option>Rogue</option>
+<option>Sorcerer</option>
+<option>Warlock</option>
+<option>Wizard</option>
+</select>
+
+<select id="race" onchange="updateSubrace();applyRacialBonuses();">
+<option value="">Select Race</option>
+<option>Dragonborn</option>
+<option>Dwarf</option>
+<option>Elf</option>
+<option>Gnome</option>
+<option>Half-Elf</option>
+<option>Half-Orc</option>
+<option>Halfling</option>
+<option>Human</option>
+<option>Tiefling</option>
+</select>
+
+<select id="subrace" onchange="applyRacialBonuses();">
+<option value="">Subrace (if applicable)</option>
+</select>
+
+<div id="halfElfChoices" style="display:none;">
+<p>Half-Elf: Choose two +1 bonuses (not CHA)</p>
+<select id="halfElf1" onchange="applyRacialBonuses()"></select>
+<select id="halfElf2" onchange="applyRacialBonuses()"></select>
+</div>
+
+</div>
+
+<div class="section">
+<h2>Roll Stats (5d6 drop lowest 2)</h2>
+<button onclick="rollStats()">Roll 6 Sets</button>
+<button onclick="autoAssign()">Auto Assign</button>
+<div id="rolledStats"></div>
+
+<div id="stats"></div>
+</div>
+
+<div class="section">
+<button onclick="fillPDF()">Download Filled PDF</button>
+</div>
+
+<script>
+
+const statsList = ["str","dex","con","int","wis","cha"];
+let rolledResults = [];
+let baseStats = {};
+
+// Create stat inputs
+function buildStatInputs(){
+  const container = document.getElementById("stats");
+  statsList.forEach(stat=>{
+    const div = document.createElement("div");
+    div.className="stat-line";
+    div.innerHTML = stat.toUpperCase()+": "+
+      `<input id="${stat}" type="number" oninput="storeBaseStats();updateMods();applyRacialBonuses()"> 
+       <span id="${stat}Mod"></span>`;
+    container.appendChild(div);
+  });
+}
+buildStatInputs();
+
+function rollDie(){ return Math.floor(Math.random()*6)+1; }
+
+function roll5d6Drop2(){
+  let rolls=[];
+  for(let i=0;i<5;i++) rolls.push(rollDie());
+  rolls.sort((a,b)=>a-b);
+  return rolls[2]+rolls[3]+rolls[4];
+}
+
+function rollStats(){
+  rolledResults=[];
+  for(let i=0;i<6;i++) rolledResults.push(roll5d6Drop2());
+  document.getElementById("rolledStats").innerHTML="Rolled: "+rolledResults.join(", ");
+}
+
+const classPriority={
+Barbarian:["str","con","dex","wis","cha","int"],
+Bard:["cha","dex","con","wis","int","str"],
+Cleric:["wis","con","str","dex","cha","int"],
+Druid:["wis","con","dex","int","cha","str"],
+Fighter:["str","con","dex","wis","cha","int"],
+Monk:["dex","wis","con","str","int","cha"],
+Paladin:["str","cha","con","wis","dex","int"],
+Ranger:["dex","wis","con","str","cha","int"],
+Rogue:["dex","con","cha","wis","int","str"],
+Sorcerer:["cha","con","dex","wis","int","str"],
+Warlock:["cha","con","dex","wis","int","str"],
+Wizard:["int","con","dex","wis","cha","str"]
+};
+
+function autoAssign(){
+  const cls=document.getElementById("class").value;
+  if(!cls||rolledResults.length!==6) return alert("Select class & roll first.");
+  let sorted=[...rolledResults].sort((a,b)=>b-a);
+  classPriority[cls].forEach((stat,i)=>{
+    document.getElementById(stat).value=sorted[i];
+  });
+  storeBaseStats();
+  applyRacialBonuses();
+}
+
+function storeBaseStats(){
+  statsList.forEach(stat=>{
+    baseStats[stat]=parseInt(document.getElementById(stat).value)||0;
+  });
+}
+
+const racialBonuses={
+Dragonborn:{str:2,cha:1},
+Dwarf:{con:2},
+"Hill Dwarf":{wis:1},
+"Mountain Dwarf":{str:2},
+Elf:{dex:2},
+"High Elf":{int:1},
+"Wood Elf":{wis:1},
+"Drow":{cha:1},
+Gnome:{int:2},
+"Forest Gnome":{dex:1},
+"Rock Gnome":{con:1},
+"Half-Orc":{str:2,con:1},
+Halfling:{dex:2},
+Lightfoot:{cha:1},
+Stout:{con:1},
+Human:{str:1,dex:1,con:1,int:1,wis:1,cha:1},
+Tiefling:{cha:2,int:1}
+};
+
+const subraceData={
+Dwarf:["Hill Dwarf","Mountain Dwarf"],
+Elf:["High Elf","Wood Elf","Drow"],
+Gnome:["Forest Gnome","Rock Gnome"],
+Halfling:["Lightfoot","Stout"]
+};
+
+function updateSubrace(){
+  const race=document.getElementById("race").value;
+  const sub=document.getElementById("subrace");
+  sub.innerHTML='<option value="">Subrace</option>';
+  document.getElementById("halfElfChoices").style.display="none";
+
+  if(race==="Half-Elf"){
+    document.getElementById("halfElfChoices").style.display="block";
+    buildHalfElfSelectors();
+  }
+
+  if(subraceData[race]){
+    subraceData[race].forEach(s=>{
+      const o=document.createElement("option");
+      o.value=s; o.textContent=s;
+      sub.appendChild(o);
+    });
+  }
+}
+
+function buildHalfElfSelectors(){
+  const options=statsList.filter(s=>s!=="cha");
+  ["halfElf1","halfElf2"].forEach(id=>{
+    const sel=document.getElementById(id);
+    sel.innerHTML="";
+    options.forEach(stat=>{
+      const o=document.createElement("option");
+      o.value=stat; o.textContent=stat.toUpperCase();
+      sel.appendChild(o);
+    });
+  });
+}
+
+function applyRacialBonuses(){
+  storeBaseStats();
+  const race=document.getElementById("race").value;
+  const sub=document.getElementById("subrace").value;
+
+  let finalStats={...baseStats};
+
+  function apply(obj){
+    for(let s in obj){
+      finalStats[s]+=obj[s];
+    }
+  }
+
+  if(racialBonuses[race]) apply(racialBonuses[race]);
+  if(racialBonuses[sub]) apply(racialBonuses[sub]);
+
+  if(race==="Half-Elf"){
+    finalStats["cha"]+=2;
+    const b1=document.getElementById("halfElf1").value;
+    const b2=document.getElementById("halfElf2").value;
+    if(b1) finalStats[b1]+=1;
+    if(b2 && b2!==b1) finalStats[b2]+=1;
+  }
+
+  statsList.forEach(stat=>{
+    document.getElementById(stat).value=finalStats[stat];
+  });
+
+  updateMods();
+}
+
+function getMod(score){ return Math.floor((score-10)/2); }
+
+function updateMods(){
+  statsList.forEach(stat=>{
+    const val=parseInt(document.getElementById(stat).value)||0;
+    const mod=getMod(val);
+    document.getElementById(stat+"Mod").textContent=
+      " Modifier: "+(mod>=0?"+":"")+mod;
+  });
+}
+
+async function fillPDF(){
+  const bytes=await fetch("5E_CharacterSheet_Fillable.pdf").then(r=>r.arrayBuffer());
+  const pdfDoc=await PDFLib.PDFDocument.load(bytes);
+  const form=pdfDoc.getForm();
+
+  try{
+    form.getTextField("CharacterName").setText(document.getElementById("name").value);
+    form.getTextField("ClassLevel").setText(document.getElementById("class").value+" 1");
+    form.getTextField("Race ").setText(
+      document.getElementById("race").value+
+      (document.getElementById("subrace").value?
+        " ("+document.getElementById("subrace").value+")":"")
+    );
+
+    statsList.forEach(stat=>{
+      form.getTextField(stat.toUpperCase()).setText(
+        document.getElementById(stat).value
+      );
+    });
+
+  }catch(e){
+    alert("PDF field names may differ slightly.");
+  }
+
+  const pdfBytes=await pdfDoc.save();
+  const blob=new Blob([pdfBytes],{type:"application/pdf"});
+  const link=document.createElement("a");
+  link.href=URL.createObjectURL(blob);
+  link.download="DND_Character.pdf";
+  link.click();
+}
+
+</script>
+</body>
+</html>
