@@ -161,6 +161,7 @@ Stout:{con:1},
 Human:{str:1,dex:1,con:1,int:1,wis:1,cha:1},
 Tiefling:{cha:2,int:1}
 };
+  
 
 const subraceData={
 Dwarf:["Hill Dwarf","Mountain Dwarf"],
@@ -204,16 +205,55 @@ function buildHalfElfSelectors(){
 
 function applyRacialBonuses(){
   storeBaseStats();
-  const race=document.getElementById("race").value;
-  const sub=document.getElementById("subrace").value;
+  const race = document.getElementById("race").value;
+  const sub = document.getElementById("subrace").value;
 
-  let finalStats={...baseStats};
+  let finalStats = {...baseStats};
+  let bonusesText = {}; // To store the bonus text for display
 
   function apply(obj){
-    for(let s in obj){
-      finalStats[s]+=obj[s];
+    for (let s in obj) {
+      finalStats[s] += obj[s];
+      if (!bonusesText[s]) bonusesText[s] = "";
+      bonusesText[s] += ` (+${obj[s]})`; // Track the bonuses for each stat
     }
   }
+
+  // Apply the bonuses based on race
+  if (racialBonuses[race]) apply(racialBonuses[race]);
+  if (racialBonuses[sub]) apply(racialBonuses[sub]);
+
+  if (race === "Half-Elf") {
+    finalStats["cha"] += 2; // Half-Elf gets +2 CHA by default
+    const b1 = document.getElementById("halfElf1").value;
+    const b2 = document.getElementById("halfElf2").value;
+    if (b1) {
+      finalStats[b1] += 1;
+      bonusesText[b1] += ` (+1)`; // Track the +1 bonus
+    }
+    if (b2 && b2 !== b1) {
+      finalStats[b2] += 1;
+      bonusesText[b2] += ` (+1)`; // Track the second +1 bonus
+    }
+  }
+
+  // Now, update the stats display
+  statsList.forEach(stat => {
+    const statElement = document.getElementById(stat);
+    const modElement = document.getElementById(stat + "Mod");
+
+    statElement.value = finalStats[stat];
+    modElement.textContent = `Modifier: ${getMod(finalStats[stat]) >= 0 ? "+" : ""}${getMod(finalStats[stat])}`;
+
+    // Show the bonus next to the stat
+    if (bonusesText[stat]) {
+      statElement.nextElementSibling.textContent = bonusesText[stat]; // Add bonus text next to the stat input
+    }
+  });
+
+  updateMods();
+}
+
 
   if(racialBonuses[race]) apply(racialBonuses[race]);
   if(racialBonuses[sub]) apply(racialBonuses[sub]);
